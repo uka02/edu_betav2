@@ -1,6 +1,8 @@
 @php
     $animationDelay = $animationDelay ?? null;
     $lessonSubject = \App\Models\Lesson::normalizeSubject($lesson->subject ?? \App\Models\Lesson::defaultSubject());
+    $showLessonReports = $showLessonReports ?? false;
+    $reportCount = (int) ($lesson->report_count ?? 0);
 @endphp
 
 <div class="lcard" @if($animationDelay !== null) style="animation-delay:{{ $animationDelay }}s;" @endif>
@@ -31,6 +33,11 @@
             <span class="lm-chip {{ $lesson->is_free ? 'lm-free' : 'lm-paid' }}">
                 {{ $lesson->is_free ? __('lessons.free') : __('lessons.paid') }}
             </span>
+            @if($showLessonReports)
+                <span class="lm-chip" style="background:var(--red-soft);color:var(--red);">
+                    {{ __('lessons.report_count') }}: {{ $reportCount }}
+                </span>
+            @endif
             @if($lesson->difficulty)
                 <span class="lm-chip lm-diff">{{ __('lessons.' . $lesson->difficulty) }}</span>
             @endif

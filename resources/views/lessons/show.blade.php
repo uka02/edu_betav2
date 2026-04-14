@@ -243,6 +243,7 @@
         .engagement-ghost { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border-radius: 12px; font-size: 13px; font-weight: 700; text-decoration: none; border: none; cursor: pointer; font-family: "Roboto", sans-serif; transition: transform .15s ease, opacity .15s ease, background .15s ease; }
         .engagement-submit { background: linear-gradient(135deg, var(--blue-dim), var(--blue)); color: #fff; box-shadow: 0 6px 16px var(--blue-glow); }
         .engagement-submit.muted { background: linear-gradient(135deg, #b45309, var(--amber)); box-shadow: 0 6px 16px rgba(245,166,35,.18); }
+        .engagement-submit.danger { background: linear-gradient(135deg, #b91c1c, var(--red)); box-shadow: 0 6px 16px rgba(220,38,38,.18); }
         .engagement-submit:hover,
         .engagement-ghost:hover { opacity: .94; transform: translateY(-1px); }
         .engagement-ghost { background: var(--s2); border: 1px solid var(--b1); color: var(--tx2); }
@@ -655,13 +656,20 @@
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                 {{ __('lessons.edit') }}
                             </a>
-                            <form action="{{ route('lessons.destroy', $lesson) }}" method="POST" style="display:inline;" onsubmit="return confirm('{{ __('lessons.confirm_delete') ?? 'Are you sure?' }}')">
-                                @csrf @method('DELETE')
-                                <button type="submit" class="btn-danger">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                                    {{ __('lessons.delete') }}
-                                </button>
-                            </form>
+                            @if($isAdminViewer)
+                                <a href="#lesson-moderation" class="btn-danger">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l8 4v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V7l8-4z"/><path d="M9.5 12l1.8 1.8 3.7-3.7"/></svg>
+                                    {{ __('lessons.moderate_lesson') }}
+                                </a>
+                            @else
+                                <form action="{{ route('lessons.destroy', $lesson) }}" method="POST" style="display:inline;" onsubmit="return confirm('{{ __('lessons.confirm_delete') ?? 'Are you sure?' }}')">
+                                    @csrf @method('DELETE')
+                                    <button type="submit" class="btn-danger">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                        {{ __('lessons.delete') }}
+                                    </button>
+                                </form>
+                            @endif
                         @endif
                     </div>
                 </div>
@@ -781,6 +789,7 @@
             @include('partials.lessons.show-engagement-section', [
                 'lesson' => $lesson,
                 'canManageLesson' => $viewerCanManageLesson,
+                'canAdminModerateLesson' => $canAdminModerateLesson ?? false,
                 'isAuthenticatedViewer' => $isAuthenticatedViewer,
                 'lessonEngagementEnabled' => $lessonEngagementEnabled,
                 'structuredLessonFeedbackEnabled' => $structuredLessonFeedbackEnabled,

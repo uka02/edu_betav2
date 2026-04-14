@@ -2,6 +2,7 @@
     $lessonEngagementEnabled = $lessonEngagementEnabled ?? true;
     $structuredLessonFeedbackEnabled = $structuredLessonFeedbackEnabled ?? false;
     $canManageLesson = $canManageLesson ?? false;
+    $canAdminModerateLesson = $canAdminModerateLesson ?? false;
     $canSubmitLessonFeedback = $lessonEngagementEnabled && $isAuthenticatedViewer && ! $canManageLesson && $lesson->is_published;
     $showGuestLessonFeedbackPrompt = $lessonEngagementEnabled && ! $isAuthenticatedViewer && $lesson->is_published;
     $reportReasonOptions = \App\Models\LessonReport::reasonOptions();
@@ -11,6 +12,7 @@
     $positiveFeedbackTextValue = old('positive_feedback', $currentUserFeedback?->positive_feedback ?? ($structuredLessonFeedbackEnabled ? $currentUserFeedback?->feedback : null));
     $negativeFeedbackTextValue = old('negative_feedback', $currentUserFeedback?->negative_feedback);
     $reportDetailsValue = old('details', $currentUserReport?->details);
+    $deletionReasonValue = old('deletion_reason');
 @endphp
 
 <section class="engagement-section" id="lesson-feedback">
@@ -191,13 +193,46 @@
         </div>
     @elseif($canManageLesson)
         @if(! $lesson->is_published)
-            <div class="engagement-grid single">
+            <div class="engagement-grid{{ $canAdminModerateLesson ? '' : ' single' }}">
                 <article class="engagement-card">
                     <div class="engagement-card-head">
                         <h3>{{ __('lessons.publish_to_collect_feedback') }}</h3>
                     </div>
                     <p class="engagement-card-copy">{{ __('lessons.publish_to_collect_feedback_copy') }}</p>
                 </article>
+
+                @if($canAdminModerateLesson)
+                    <article class="engagement-card" id="lesson-moderation">
+                        <div class="engagement-card-head">
+                            <h3>{{ __('lessons.moderate_lesson') }}</h3>
+                        </div>
+                        <p class="engagement-card-copy">{{ __('lessons.admin_moderate_lesson_copy') }}</p>
+
+                        <form action="{{ route('lessons.destroy', $lesson) }}" method="POST" class="engagement-form">
+                            @csrf
+                            @method('DELETE')
+
+                            <div>
+                                <label for="lessonDeletionReasonDraft" class="engagement-label">{{ __('lessons.deletion_reason') }}</label>
+                                <textarea
+                                    id="lessonDeletionReasonDraft"
+                                    name="deletion_reason"
+                                    class="engagement-textarea"
+                                    rows="5"
+                                    required
+                                    placeholder="{{ __('lessons.deletion_reason_placeholder') }}"
+                                >{{ $deletionReasonValue }}</textarea>
+                                @error('deletion_reason')
+                                    <div class="engagement-error">{{ $message }}</div>
+                                @enderror
+                            </div>
+
+                            <button type="submit" class="engagement-submit danger">
+                                {{ __('lessons.delete_lesson_with_notice') }}
+                            </button>
+                        </form>
+                    </article>
+                @endif
             </div>
         @else
             <div class="engagement-grid">
@@ -277,6 +312,40 @@
                         <div class="engagement-empty">{{ __('lessons.no_reports_yet') }}</div>
                     @endif
                 </article>
+
+                @if($canAdminModerateLesson)
+                    <article class="engagement-card" id="lesson-moderation">
+                        <div class="engagement-card-head">
+                            <h3>{{ __('lessons.moderate_lesson') }}</h3>
+                            <span class="engagement-badge danger">{{ __('lessons.report_count') }}: {{ $reportCount }}</span>
+                        </div>
+                        <p class="engagement-card-copy">{{ __('lessons.admin_moderate_lesson_copy') }}</p>
+
+                        <form action="{{ route('lessons.destroy', $lesson) }}" method="POST" class="engagement-form">
+                            @csrf
+                            @method('DELETE')
+
+                            <div>
+                                <label for="lessonDeletionReason" class="engagement-label">{{ __('lessons.deletion_reason') }}</label>
+                                <textarea
+                                    id="lessonDeletionReason"
+                                    name="deletion_reason"
+                                    class="engagement-textarea"
+                                    rows="5"
+                                    required
+                                    placeholder="{{ __('lessons.deletion_reason_placeholder') }}"
+                                >{{ $deletionReasonValue }}</textarea>
+                                @error('deletion_reason')
+                                    <div class="engagement-error">{{ $message }}</div>
+                                @enderror
+                            </div>
+
+                            <button type="submit" class="engagement-submit danger">
+                                {{ __('lessons.delete_lesson_with_notice') }}
+                            </button>
+                        </form>
+                    </article>
+                @endif
             </div>
         @endif
     @endif

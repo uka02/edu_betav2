@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Lesson;
+use App\Models\LessonReport;
 use App\Models\User;
+use App\Notifications\LessonDeletedByAdminNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -101,5 +103,74 @@ class AdminLessonAccessTest extends TestCase
 
         $draftLesson->refresh();
         $this->assertTrue($draftLesson->is_published);
+    }
+
+    public function test_admin_can_see_report_counts_and_send_deletion_reason_to_educator(): void
+    {
+        $admin = User::factory()->admin()->create(['name' => 'Platform Admin']);
+        $educator = User::factory()->educator()->create(['name' => 'Lesson Owner']);
+        $reportingLearnerOne = User::factory()->learner()->create();
+        $reportingLearnerTwo = User::factory()->learner()->create();
+
+        $lesson = Lesson::create([
+            'user_id' => $educator->id,
+            'title' => 'Reported Lesson',
+            'type' => 'text',
+            'duration_minutes' => 20,
+            'is_published' => true,
+            'is_free' => true,
+            'segments' => [],
+        ]);
+
+        LessonReport::create([
+            'lesson_id' => $lesson->id,
+            'user_id' => $reportingLearnerOne->id,
+            'reason' => LessonReport::REASON_INACCURATE,
+            'details' => 'Several facts are outdated.',
+        ]);
+
+        LessonReport::create([
+            'lesson_id' => $lesson->id,
+            'user_id' => $reportingLearnerTwo->id,
+            'reason' => LessonReport::REASON_BROKEN,
+            'details' => 'A document link is broken.',
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('lessons.index'))
+            ->assertOk()
+            ->assertSee(__('lessons.report_count') . ': 2')
+            ->assertSee('Reported Lesson');
+
+        $this->actingAs($admin)
+            ->from(route('lessons.show', $lesson))
+            ->delete(route('lessons.destroy', $lesson), [
+                'deletion_reason' => 'Removed after multiple learner reports confirmed broken and inaccurate content.',
+            ])
+            ->assertRedirect(route('lessons.index'))
+            ->assertSessionHas('success', __('lessons.lesson_deleted_with_notice'));
+
+        $this->assertSoftDeleted('lessons', [
+            'id' => $lesson->id,
+        ]);
+
+        $notice = $educator->fresh()->notifications()->latest()->first();
+
+        $this->assertNotNull($notice);
+        $this->assertSame(LessonDeletedByAdminNotification::class, $notice->type);
+        $this->assertSame('Reported Lesson', $notice->data['lesson_title']);
+        $this->assertSame('Platform Admin', $notice->data['admin_name']);
+        $this->assertSame(
+            'Removed after multiple learner reports confirmed broken and inaccurate content.',
+            $notice->data['reason']
+        );
+
+        $this->actingAs($educator)
+            ->get(route('lessons.index'))
+            ->assertOk()
+            ->assertSee(__('lessons.recent_admin_notices'))
+            ->assertSee('Reported Lesson')
+            ->assertSee('Platform Admin')
+            ->assertSee('Removed after multiple learner reports confirmed broken and inaccurate content.');
     }
 }

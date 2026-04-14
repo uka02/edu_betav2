@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\LessonFeedback;
 use App\Models\LessonReport;
 use App\Models\Lesson;
+use App\Models\User;
+use App\Notifications\LessonDeletedByAdminNotification;
 use App\Services\LessonExamService;
 use App\Services\LessonProgressService;
 use App\Support\Lessons\LessonPublishChecklist;
@@ -30,8 +32,10 @@ class LessonController extends Controller
 
         if ($this->isLessonManager($user)) {
             $isAdminLessonWorkspace = $user->isAdmin();
+            $showLessonReports = $isAdminLessonWorkspace && $this->lessonReportsTableAvailable();
             $lessons = Lesson::query()
                 ->with('user:id,name')
+                ->when($showLessonReports, fn ($query) => $query->withCount(['reports as report_count']))
                 ->when(! $isAdminLessonWorkspace, fn ($query) => $query->where('user_id', Auth::id()))
                 ->latest()
                 ->paginate(12);
@@ -41,6 +45,8 @@ class LessonController extends Controller
                 'isAdminLessonWorkspace' => $isAdminLessonWorkspace,
                 'canCreateLessons' => $user->isEducator(),
                 'showLessonOwner' => $isAdminLessonWorkspace,
+                'showLessonReports' => $showLessonReports,
+                'lessonDeletionNotifications' => $this->lessonDeletionNotificationsFor($user),
             ]);
         }
 
@@ -215,6 +221,7 @@ class LessonController extends Controller
             'lesson' => $lesson,
             'lessonProgress' => $lessonProgress,
             'canManageLesson' => $canManageLesson,
+            'canAdminModerateLesson' => (bool) $viewer?->isAdmin(),
             'lessonEngagementEnabled' => $lessonEngagementEnabled,
             'structuredLessonFeedbackEnabled' => $structuredLessonFeedbackEnabled,
             'currentUserFeedback' => $currentUserFeedback,
@@ -421,13 +428,29 @@ class LessonController extends Controller
         return back()->with('success', __('lessons.lesson_published'));
     }
 
-    public function destroy(Lesson $lesson)
+    public function destroy(Request $request, Lesson $lesson)
     {
         $this->ensureLessonManageAccess($lesson);
+        $user = $request->user();
+        $notifiedEducator = false;
+
+        if ($user?->isAdmin()) {
+            $validated = $request->validate([
+                'deletion_reason' => ['required', 'string', 'max:3000'],
+            ]);
+
+            $notifiedEducator = $this->sendLessonDeletionNotice(
+                $user,
+                $lesson,
+                trim((string) $validated['deletion_reason'])
+            );
+        }
 
         $lesson->delete();
 
-        return redirect()->route('lessons.index')->with('success', __('lessons.lesson_deleted'));
+        return redirect()
+            ->route('lessons.index')
+            ->with('success', $notifiedEducator ? __('lessons.lesson_deleted_with_notice') : __('lessons.lesson_deleted'));
     }
 
     public function forceDelete($id)
@@ -826,6 +849,44 @@ class LessonController extends Controller
     {
         return Schema::hasTable((new LessonFeedback())->getTable())
             && Schema::hasTable((new LessonReport())->getTable());
+    }
+
+    private function lessonReportsTableAvailable(): bool
+    {
+        return Schema::hasTable((new LessonReport())->getTable());
+    }
+
+    private function lessonNotificationsTableAvailable(): bool
+    {
+        return Schema::hasTable('notifications');
+    }
+
+    private function lessonDeletionNotificationsFor($user): Collection
+    {
+        if (! $user?->isEducator() || ! $this->lessonNotificationsTableAvailable()) {
+            return collect();
+        }
+
+        return $user->notifications()
+            ->where('type', LessonDeletedByAdminNotification::class)
+            ->latest()
+            ->take(4)
+            ->get();
+    }
+
+    private function sendLessonDeletionNotice(User $admin, Lesson $lesson, string $reason): bool
+    {
+        if (
+            ! $this->lessonNotificationsTableAvailable()
+            || (int) $lesson->user_id === (int) $admin->id
+            || ! $lesson->user
+        ) {
+            return false;
+        }
+
+        $lesson->user->notify(new LessonDeletedByAdminNotification($lesson, $admin, $reason));
+
+        return true;
     }
 
     private function lessonFeedbackSupportsStructuredFields(): bool

@@ -229,6 +229,8 @@
                 </div>
             @endif
 
+            @include('partials.lessons.deletion-notices')
+
             <div class="page-head">
                 <div class="page-title">{{ ($isAdminLessonWorkspace ?? false) ? __('dashboard.view_all_lessons') : __('lessons.my_lessons') }}</div>
                 <div class="btn-row">
@@ -255,6 +257,7 @@
                     @foreach($lessons as $i => $lesson)
                         @include('partials.lessons.manage-card', [
                             'animationDelay' => $i * 0.04,
+                            'showLessonReports' => $showLessonReports ?? false,
                         ])
                     @endforeach
                 </div>
